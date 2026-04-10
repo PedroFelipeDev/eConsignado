@@ -1,0 +1,5 @@
+{
+  "name": "Remix: eConsignado",
+  "description": "Sistema de gestão e importação de contratos de empréstimo consignado com relatórios em PDF e gráficos interativos.",
+  "requestFramePermissions": []
+}
