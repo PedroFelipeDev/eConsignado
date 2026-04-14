@@ -53,18 +53,26 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
   const [editCompetence, setEditCompetence] = useState('');
 
   const competences = useMemo(() => {
-    const set = new Set(payments.map(p => p.competencia));
-    return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [payments]);
+    const all = Array.from(new Set(payments.map(p => p.competencia)));
+    const filtered = yearFilter === 'all' 
+      ? all 
+      : all.filter(c => c.endsWith(yearFilter));
+    return filtered.sort((a, b) => b.localeCompare(a));
+  }, [payments, yearFilter]);
+
 
   const years = useMemo(() => getYears(payments), [payments]);
-
-  // Initialize selected competences with all options
+  
+  // Initialize/Sync selected competences when list changes (e.g. year filter changes)
   useEffect(() => {
-    if (competences.length > 0 && selectedCompetences.length === 0) {
+    if (competences.length > 0) {
       setSelectedCompetences(competences);
+    } else {
+      setSelectedCompetences([]);
     }
   }, [competences]);
+
+
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -345,33 +353,15 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
             />
           </div>
 
-          <div className="flex items-center gap-2 bg-bg-light dark:bg-bg-dark px-4 py-3 rounded-xl border border-transparent focus-within:border-primary/20 transition-all">
-            <Calendar className="w-5 h-5 text-text-muted-light dark:text-text-muted-dark" />
-            <select
-              value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-              className="bg-transparent border-none focus:ring-0 text-text-light dark:text-text-dark font-medium cursor-pointer appearance-none pr-8 relative"
-              style={{ backgroundImage: 'none' }}
-            >
-              <option value="all" className="dark:bg-card-dark">Todos os Anos</option>
-              {years.map(year => (
-                <option key={year} value={year} className="dark:bg-card-dark">{year}</option>
-              ))}
-            </select>
-            <div className="pointer-events-none -ml-6">
-              <ChevronDown className="w-4 h-4 text-text-muted-light" />
-            </div>
-          </div>
-          
           {/* Multi-select Competence Dropdown */}
           <div className="relative" ref={competenceDropdownRef}>
             <button
               onClick={() => setIsCompetenceDropdownOpen(!isCompetenceDropdownOpen)}
-              className="flex items-center gap-2 bg-bg-light dark:bg-bg-dark px-4 py-3 rounded-xl text-text-light dark:text-text-dark font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-[160px] justify-between"
+              className="flex items-center gap-2 bg-bg-light dark:bg-bg-dark px-4 py-3 rounded-xl text-text-light dark:text-text-dark font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-w-[200px] justify-between"
             >
               <div className="flex items-center gap-2">
                 <Filter className="w-5 h-5 text-text-muted-light dark:text-text-muted-dark" />
-                <span className="truncate max-w-[100px]">
+                <span className="truncate">
                   {selectedCompetences.length === competences.length 
                     ? 'Todas Competências' 
                     : selectedCompetences.length === 0 
@@ -408,6 +398,25 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
               </div>
             )}
           </div>
+
+          <div className="flex items-center gap-2 bg-bg-light dark:bg-bg-dark px-4 py-3 rounded-xl border border-transparent focus-within:border-primary/20 transition-all">
+            <Calendar className="w-5 h-5 text-text-muted-light dark:text-text-muted-dark" />
+            <select
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+              className="bg-transparent border-none focus:ring-0 text-text-light dark:text-text-dark font-medium cursor-pointer appearance-none pr-8 relative"
+              style={{ backgroundImage: 'none' }}
+            >
+              <option value="all" className="dark:bg-card-dark">Todos os Anos</option>
+              {years.map(year => (
+                <option key={year} value={year} className="dark:bg-card-dark">{year}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none -ml-6">
+              <ChevronDown className="w-4 h-4 text-text-muted-light" />
+            </div>
+          </div>
+
         </div>
 
         <div className="overflow-x-auto">

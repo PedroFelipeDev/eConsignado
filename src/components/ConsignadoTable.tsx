@@ -48,18 +48,25 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
 
 
   const competences = useMemo(() => {
-    const set = new Set(data.map(item => item.competencia));
-    return Array.from(set).sort();
-  }, [data]);
+    const all = Array.from(new Set(data.map(item => item.competencia)));
+    const filtered = yearFilter === 'all' 
+      ? all 
+      : all.filter(c => c.endsWith(yearFilter));
+    return filtered.sort();
+  }, [data, yearFilter]);
+
 
   const years = useMemo(() => getYears(data), [data]);
 
-  // Initialize selected competences with all options
+  // Initialize/Sync selected competences when list changes (e.g. year filter changes)
   useEffect(() => {
-    if (competences.length > 0 && selectedCompetences.length === 0) {
+    if (competences.length > 0) {
       setSelectedCompetences(competences);
+    } else {
+      setSelectedCompetences([]);
     }
   }, [competences]);
+
 
   // Close dropdown when clicking outside
   useEffect(() => {
