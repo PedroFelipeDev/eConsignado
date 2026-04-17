@@ -19,20 +19,40 @@ import {
   Edit2,
   Check,
   X,
-  FileText
+  FileText,
+  Building2,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatCurrency, formatCPF, getYears, maskCompetence } from '../lib/utils';
+import { cn, formatCurrency, formatCPF, getYears, maskCompetence, normalizeCPF } from '../lib/utils';
 
 import { PagamentoConsignado } from '../types/pagamento';
+import { FGTSRecord } from '../types/fgts';
+import { Consignado } from '../types/consignado';
+import { formatCompetencia } from '../lib/csvParser';
 import { generatePaymentsPDF, generatePaymentsCSV } from '../lib/pdf-generator';
+import { FGTSDetailModal } from './FGTSDetailModal';
+
+interface UnifiedPayment {
+  id: string; // Composite ID or primary key
+  cpf: string;
+  nomeTrabalhador: string;
+  competencia: string;
+  contrato: string;
+  valorConsignado: number;
+  valorFGTS: number;
+  temEmprestimo: boolean;
+  consignadoId?: string;
+}
 
 interface PaymentsManagerProps {
   user: User;
   payments: PagamentoConsignado[];
+  fgtsRecords: FGTSRecord[];
+  data: Consignado[];
 }
 
-export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
+export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompetences, setSelectedCompetences] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState('all');
@@ -52,18 +72,94 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
   const [editValue, setEditValue] = useState('');
   const [editCompetence, setEditCompetence] = useState('');
 
+  const [isFGTSModalOpen, setIsFGTSModalOpen] = useState(false);
+  const [selectedFGTSCpf, setSelectedFGTSCpf] = useState<string | null>(null);
+  const [selectedFGTSCompetence, setSelectedFGTSCompetence] = useState<string | null>(null);
+
+  const unifiedList = useMemo(() => {
+    const list: UnifiedPayment[] = [];
+    const seenKeys = new Set<string>();
+
+    // 1. Process Consignado Payments
+    payments.forEach(p => {
+      const normCpf = normalizeCPF(p.cpf);
+      const key = `${normCpf}_${p.competencia}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        
+        // Find matching FGTS payments
+        const matchingFGTS = fgtsRecords.filter(r => 
+          r.tipo === 'pago' && 
+          normalizeCPF(r.cpf) === normCpf && 
+          formatCompetencia(r.competencia_apuracao) === p.competencia
+        );
+        const totalFGTS = matchingFGTS.reduce((acc, r) => acc + r.valor_fgts_na_guia, 0);
+
+        // Check if person has a loan contract for this competence
+        const hasLoanContract = data.some(d => 
+          normalizeCPF(d.cpf) === normCpf && 
+          d.competencia === p.competencia
+        );
+
+        list.push({
+          id: p.id || `up_${normCpf}_${p.competencia}`,
+          cpf: p.cpf,
+          nomeTrabalhador: p.nomeTrabalhador,
+          competencia: p.competencia,
+          contrato: p.contrato,
+          valorConsignado: p.valorPago,
+          valorFGTS: totalFGTS,
+          temEmprestimo: hasLoanContract,
+          consignadoId: p.id
+        });
+      }
+    });
+
+    // 2. Process FGTS Payments (only those not already in the list)
+    fgtsRecords.filter(r => r.tipo === 'pago').forEach(r => {
+      const normCpf = normalizeCPF(r.cpf);
+      const comp = formatCompetencia(r.competencia_apuracao);
+      const key = `${normCpf}_${comp}`;
+      
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+
+        // Check if person has a loan contract for this competence
+        const hasLoanContract = data.some(d => 
+          normalizeCPF(d.cpf) === normCpf && 
+          d.competencia === comp
+        );
+
+        list.push({
+          id: `up_${normCpf}_${comp}`,
+          cpf: r.cpf,
+          nomeTrabalhador: r.nome_trabalhador,
+          competencia: comp,
+          contrato: '-',
+          valorConsignado: 0,
+          valorFGTS: fgtsRecords.filter(f => f.tipo === 'pago' && normalizeCPF(f.cpf) === normCpf && formatCompetencia(f.competencia_apuracao) === comp).reduce((acc, f) => acc + f.valor_fgts_na_guia, 0),
+          temEmprestimo: hasLoanContract,
+          consignadoId: undefined
+        });
+      }
+    });
+
+    return list;
+  }, [payments, fgtsRecords, data]);
+
   const competences = useMemo(() => {
-    const all = Array.from(new Set(payments.map(p => p.competencia)));
+    const all = Array.from(new Set(unifiedList.map(p => p.competencia)));
     const filtered = yearFilter === 'all' 
       ? all 
       : all.filter(c => c.endsWith(yearFilter));
     return filtered.sort((a, b) => b.localeCompare(a));
-  }, [payments, yearFilter]);
+  }, [unifiedList, yearFilter]);
 
-
-  const years = useMemo(() => getYears(payments), [payments]);
+  const years = useMemo(() => {
+    const allYears = Array.from(new Set(unifiedList.map(item => item.competencia.split('/').pop())));
+    return (allYears.filter(Boolean) as string[]).sort((a, b) => b.localeCompare(a));
+  }, [unifiedList]);
   
-  // Initialize/Sync selected competences when list changes (e.g. year filter changes)
   useEffect(() => {
     if (competences.length > 0) {
       setSelectedCompetences(competences);
@@ -72,9 +168,6 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
     }
   }, [competences]);
 
-
-
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (competenceDropdownRef.current && !competenceDropdownRef.current.contains(event.target as Node)) {
@@ -85,8 +178,8 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredPayments = useMemo(() => {
-    return payments.filter(p => {
+  const filteredList = useMemo(() => {
+    return unifiedList.filter(p => {
       const matchesSearch = 
         p.nomeTrabalhador.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.cpf.includes(searchTerm) ||
@@ -97,31 +190,46 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
       
       return matchesSearch && matchesCompetence && matchesYear;
     }).sort((a, b) => a.nomeTrabalhador.localeCompare(b.nomeTrabalhador));
-  }, [payments, searchTerm, selectedCompetences, yearFilter]);
+  }, [unifiedList, searchTerm, selectedCompetences, yearFilter]);
 
-  const totalExibido = useMemo(() => {
-    return filteredPayments.reduce((acc, curr) => acc + curr.valorPago, 0);
-  }, [filteredPayments]);
+  const totalConsignado = useMemo(() => {
+    return filteredList.reduce((acc, curr) => acc + curr.valorConsignado, 0);
+  }, [filteredList]);
 
-  const paginatedPayments = useMemo(() => {
+  const totalFGTS = useMemo(() => {
+    return filteredList.reduce((acc, curr) => acc + curr.valorFGTS, 0);
+  }, [filteredList]);
+
+  const paginatedList = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return filteredPayments.slice(start, start + itemsPerPage);
-  }, [filteredPayments, currentPage]);
+    return filteredList.slice(start, start + itemsPerPage);
+  }, [filteredList, currentPage]);
 
-  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredList.length / itemsPerPage);
 
   const handleExportPayments = async (type: 'pdf' | 'csv') => {
     setIsExporting(true);
     try {
-      if (filteredPayments.length === 0) {
+      if (filteredList.length === 0) {
         setStatus({ type: 'error', message: 'Nenhum pagamento encontrado para exportar.' });
         return;
       }
 
+      // Convert to legacy format for generator
+      const legacyFormat = filteredList.map(f => ({
+        id: f.consignadoId,
+        nomeTrabalhador: f.nomeTrabalhador,
+        cpf: f.cpf,
+        contrato: f.contrato,
+        valorPago: f.valorConsignado,
+        competencia: f.competencia,
+        usuario_id: user.id
+      }));
+
       if (type === 'pdf') {
-        generatePaymentsPDF(filteredPayments);
+        generatePaymentsPDF(legacyFormat as any);
       } else {
-        generatePaymentsCSV(filteredPayments);
+        generatePaymentsCSV(legacyFormat as any);
       }
     } catch (error) {
       console.error("Erro ao exportar pagamentos:", error);
@@ -136,6 +244,11 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
     
     setIsDeleting(true);
     try {
+      // Delete from both tables? User asked to "Gestão de Pagamentos" manage what was imported.
+      // Usually this tool deletes from 'pagamentos'. But now we have FGTS too.
+      // For now, let's keep it deleting from 'pagamentos' (loan payments).
+      // FGTS records are usually replaced on import anyway.
+      
       const { error, count } = await supabase
         .from('pagamentos')
         .delete({ count: 'exact' })
@@ -145,13 +258,13 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
       if (error) throw error;
       
       if (count === 0) {
-        setStatus({ type: 'error', message: `Nenhum pagamento encontrado para a competência ${deleteCompetence}.` });
+        setStatus({ type: 'error', message: `Nenhum pagamento de empréstimo encontrado para a competência ${deleteCompetence}.` });
         return;
       }
 
       setStatus({ 
         type: 'success', 
-        message: `${count} pagamentos da competência ${deleteCompetence} foram excluídos.` 
+        message: `${count} pagamentos de empréstimo da competência ${deleteCompetence} foram excluídos.` 
       });
       setShowDeleteConfirm(false);
       setDeleteCompetence('');
@@ -163,16 +276,22 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
     }
   };
 
-  const handleDeleteSingle = async (id: string) => {
+  const handleDeleteSingle = async (up: UnifiedPayment) => {
+    if (!up.consignadoId) {
+        setStatus({ type: 'error', message: 'Não é possível excluir pagamentos de FGTS por aqui. Eles devem ser substituídos por nova importação.' });
+        setDeletingId(null);
+        return;
+    }
+
     try {
       const { error } = await supabase
         .from('pagamentos')
         .delete()
-        .eq('id', id);
+        .eq('id', up.consignadoId);
       
       if (error) throw error;
 
-      setStatus({ type: 'success', message: 'Pagamento excluído com sucesso.' });
+      setStatus({ type: 'success', message: 'Pagamento de empréstimo excluído com sucesso.' });
       setDeletingId(null);
     } catch (error) {
       console.error("Erro ao excluir pagamento:", error);
@@ -180,13 +299,15 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
     }
   };
 
-  const startEditing = (p: PagamentoConsignado) => {
-    setEditingId(p.id!);
-    setEditValue(p.valorPago.toString());
-    setEditCompetence(p.competencia);
+  const startEditing = (up: UnifiedPayment) => {
+    if (!up.consignadoId) return;
+    setEditingId(up.id);
+    setEditValue(up.valorConsignado.toString());
+    setEditCompetence(up.competencia);
   };
 
-  const handleSaveEdit = async (id: string) => {
+  const handleSaveEdit = async (up: UnifiedPayment) => {
+    if (!up.consignadoId) return;
     try {
       const val = parseFloat(editValue.replace(',', '.'));
       if (isNaN(val)) {
@@ -200,12 +321,12 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
           valor_pago: val,
           competencia: editCompetence
         })
-        .eq('id', id);
+        .eq('id', up.consignadoId);
 
       if (error) throw error;
 
       setEditingId(null);
-      setStatus({ type: 'success', message: 'Pagamento atualizado com sucesso.' });
+      setStatus({ type: 'success', message: 'Pagamento de empréstimo atualizado com sucesso.' });
     } catch (error) {
       console.error("Erro ao atualizar pagamento:", error);
       setStatus({ type: 'error', message: 'Erro ao atualizar pagamento.' });
@@ -231,7 +352,7 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-display font-bold text-text-light dark:text-text-dark mb-1">Gestão de Pagamentos</h2>
-          <p className="text-text-muted-light dark:text-text-muted-dark text-sm">Visualize, altere e exclua os registros de pagamentos importados.</p>
+          <p className="text-text-muted-light dark:text-text-muted-dark text-sm">Visualize registros de pagamentos de Consignado e FGTS.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -276,7 +397,7 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
       <div className="bg-white dark:bg-card-dark rounded-2xl p-8 border border-border-light dark:border-border-dark shadow-sm">
         <h4 className="font-bold text-text-light dark:text-text-dark mb-6 flex items-center gap-2">
           <Trash2 className="w-5 h-5 text-red-500" />
-          Exclusão em Lote
+          Exclusão em Lote (Empréstimo)
         </h4>
         
         <div className="flex flex-col md:flex-row items-end gap-4">
@@ -291,7 +412,6 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
               onChange={(e) => setDeleteCompetence(maskCompetence(e.target.value))}
               className="w-full px-4 py-3 bg-bg-light dark:bg-bg-dark rounded-xl border border-border-light dark:border-border-dark focus:ring-2 focus:ring-red-500/20 text-text-light dark:text-text-dark placeholder-text-muted-light dark:placeholder-text-muted-dark"
             />
-
           </div>
           <button
             onClick={() => setShowDeleteConfirm(true)}
@@ -316,7 +436,7 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
                 <div className="flex-1">
                   <h5 className="font-bold text-red-700 dark:text-red-400 mb-1">Confirmar Exclusão Permanente</h5>
                   <p className="text-sm text-red-600 dark:text-red-400/80 mb-4">
-                    Você está prestes a excluir todos os pagamentos importados da competência <strong>{deleteCompetence}</strong>. Esta ação não pode ser desfeita.
+                    Você está prestes a excluir todos os pagamentos de empréstimo importados da competência <strong>{deleteCompetence}</strong>. Esta ação não pode ser desfeita.
                   </p>
                   <div className="flex gap-3">
                     <button
@@ -346,14 +466,13 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted-light dark:text-text-muted-dark" />
             <input
               type="text"
-              placeholder="Pesquisar por nome, CPF ou contrato..."
+              placeholder="Pesquisar por nome ou CPF..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-3 bg-bg-light dark:bg-bg-dark rounded-xl border-none focus:ring-2 focus:ring-primary/20 text-text-light dark:text-text-dark placeholder-text-muted-light dark:placeholder-text-muted-dark"
             />
           </div>
 
-          {/* Multi-select Competence Dropdown */}
           <div className="relative" ref={competenceDropdownRef}>
             <button
               onClick={() => setIsCompetenceDropdownOpen(!isCompetenceDropdownOpen)}
@@ -416,7 +535,6 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
               <ChevronDown className="w-4 h-4 text-text-muted-light" />
             </div>
           </div>
-
         </div>
 
         <div className="overflow-x-auto">
@@ -425,16 +543,17 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
               <tr className="bg-bg-light dark:bg-bg-dark border-y border-border-light dark:border-border-dark">
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Competência</th>
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Trabalhador</th>
-                <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Contrato</th>
-                <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-right">Valor Pago</th>
+                <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Empréstimo</th>
+                <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-right">Pago (Consignado)</th>
+                <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-right">Pago (FGTS)</th>
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-light dark:divide-border-dark">
-              {paginatedPayments.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+              {paginatedList.map((up) => (
+                <tr key={up.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
                   <td className="px-6 py-4">
-                    {editingId === p.id ? (
+                    {editingId === up.id ? (
                       <input
                         type="text"
                         value={editCompetence}
@@ -443,17 +562,25 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
                       />
                     ) : (
                       <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                        {p.competencia}
+                        {up.competencia}
                       </span>
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <p className="font-bold text-text-light dark:text-text-dark">{p.nomeTrabalhador}</p>
-                    <p className="text-[10px] text-text-muted-light dark:text-text-muted-dark font-mono">{formatCPF(p.cpf)}</p>
+                    <p className="font-bold text-text-light dark:text-text-dark">{up.nomeTrabalhador}</p>
+                    <p className="text-[10px] text-text-muted-light dark:text-text-muted-dark font-mono">{formatCPF(up.cpf)}</p>
                   </td>
-                  <td className="px-6 py-4 text-sm text-text-muted-light dark:text-text-muted-dark font-mono">{p.contrato}</td>
+                  <td className="px-6 py-4">
+                    {up.temEmprestimo ? (
+                        <span className="text-xs font-bold text-text-muted-light dark:text-text-muted-dark font-mono">{up.contrato}</span>
+                    ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 italic">
+                            Sem Empréstimo
+                        </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-right">
-                    {editingId === p.id ? (
+                    {editingId === up.id ? (
                       <input
                         type="text"
                         value={editValue}
@@ -461,15 +588,24 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
                         className="w-24 px-2 py-1 bg-white dark:bg-slate-800 border border-primary rounded text-right text-sm font-bold text-text-light dark:text-white"
                       />
                     ) : (
-                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(p.valorPago)}</span>
+                      <span className={cn(
+                        "text-sm font-bold",
+                        up.valorConsignado > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-text-muted-light/30"
+                      )}>{formatCurrency(up.valorConsignado)}</span>
                     )}
                   </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className={cn(
+                        "text-sm font-bold",
+                        up.valorFGTS > 0 ? "text-blue-600 dark:text-blue-400" : "text-text-muted-light/30"
+                    )}>{formatCurrency(up.valorFGTS)}</span>
+                  </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      {editingId === p.id ? (
+                    <div className="flex items-center justify-center gap-1">
+                      {editingId === up.id ? (
                         <>
                           <button
-                            onClick={() => handleSaveEdit(p.id!)}
+                            onClick={() => handleSaveEdit(up)}
                             className="p-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
                             title="Salvar"
                           >
@@ -483,11 +619,11 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
                             <X className="w-4 h-4" />
                           </button>
                         </>
-                      ) : deletingId === p.id ? (
+                      ) : deletingId === up.id ? (
                         <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 p-1 rounded-lg border border-red-100 dark:border-red-900/30">
                           <span className="text-[10px] font-bold text-red-600 dark:text-red-400 px-1">Excluir?</span>
                           <button
-                            onClick={() => handleDeleteSingle(p.id!)}
+                            onClick={() => handleDeleteSingle(up)}
                             className="p-1.5 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
                           >
                             <Check className="w-3 h-3" />
@@ -501,39 +637,58 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
                         </div>
                       ) : (
                         <>
-                          <button
-                            onClick={() => startEditing(p)}
-                            className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-all"
-                            title="Editar"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeletingId(p.id!)}
-                            className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-all"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {up.consignadoId && (
+                            <>
+                                <button
+                                    onClick={() => startEditing(up)}
+                                    className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-all"
+                                    title="Editar Pagamento Consignado"
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => setDeletingId(up.id)}
+                                    className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-all"
+                                    title="Excluir Pagamento Consignado"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </>
+                          )}
+                          
+                          {up.valorFGTS > 0 && (
+                            <button
+                                onClick={() => {
+                                    setSelectedFGTSCpf(normalizeCPF(up.cpf));
+                                    setSelectedFGTSCompetence(up.competencia);
+                                    setIsFGTSModalOpen(true);
+                                }}
+                                className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-all"
+                                title="Detalhes do FGTS"
+                            >
+                                <Building2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
-              {paginatedPayments.length === 0 && (
+              {paginatedList.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-text-muted-light dark:text-text-muted-dark italic">
+                  <td colSpan={6} className="px-6 py-12 text-center text-text-muted-light dark:text-text-muted-dark italic">
                     Nenhum pagamento encontrado.
                   </td>
                 </tr>
               )}
             </tbody>
-            {filteredPayments.length > 0 && (
+            {filteredList.length > 0 && (
               <tfoot>
                 <tr className="bg-bg-light dark:bg-bg-dark border-t border-border-light dark:border-border-dark">
-                  <td colSpan={3} className="px-6 py-4 text-sm font-bold text-text-muted-light dark:text-text-muted-dark text-right uppercase">Total Exibido:</td>
-                  <td className="px-6 py-4 text-sm font-bold text-primary dark:text-secondary text-right">{formatCurrency(totalExibido)}</td>
+                  <td colSpan={3} className="px-6 py-4 text-sm font-bold text-text-muted-light dark:text-text-muted-dark text-right uppercase">Total Parcelas:</td>
+                  <td className="px-6 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400 text-right">{formatCurrency(totalConsignado)}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-blue-600 dark:text-blue-400 text-right">{formatCurrency(totalFGTS)}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -545,7 +700,7 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
         {totalPages > 1 && (
           <div className="p-6 border-t border-border-light dark:border-border-dark flex items-center justify-between">
             <p className="text-sm text-text-muted-light dark:text-text-muted-dark">
-              Mostrando <span className="font-bold text-text-light dark:text-text-dark">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-text-light dark:text-text-dark">{Math.min(currentPage * itemsPerPage, filteredPayments.length)}</span> de <span className="font-bold text-text-light dark:text-text-dark">{filteredPayments.length}</span> resultados
+              Mostrando <span className="font-bold text-text-light dark:text-text-dark">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="font-bold text-text-light dark:text-text-dark">{Math.min(currentPage * itemsPerPage, filteredList.length)}</span> de <span className="font-bold text-text-light dark:text-text-dark">{filteredList.length}</span> resultados
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -585,6 +740,21 @@ export function PaymentsManager({ user, payments }: PaymentsManagerProps) {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {selectedFGTSCpf && selectedFGTSCompetence && isFGTSModalOpen && (
+          <FGTSDetailModal
+            cpf={selectedFGTSCpf}
+            competence={selectedFGTSCompetence}
+            records={fgtsRecords}
+            onClose={() => {
+              setIsFGTSModalOpen(false);
+              setSelectedFGTSCpf(null);
+              setSelectedFGTSCompetence(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

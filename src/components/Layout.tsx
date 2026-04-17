@@ -8,7 +8,10 @@ import {
   User as UserIcon,
   Sun,
   Moon,
-  Receipt
+  Receipt,
+  ChevronDown,
+  ChevronRight,
+  FolderDown
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -16,19 +19,26 @@ interface LayoutProps {
   children: React.ReactNode;
   user: User;
   onLogout: () => void;
-  activeTab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'payments-manager';
-  onTabChange: (tab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'payments-manager') => void;
+  activeTab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'import-fgts-devido' | 'payments-manager' | 'import-fgts-pgto';
+  onTabChange: (tab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'import-fgts-devido' | 'payments-manager' | 'import-fgts-pgto') => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
 }
 
 export function Layout({ children, user, onLogout, activeTab, onTabChange, darkMode, onToggleDarkMode }: LayoutProps) {
+  const [importMenuOpen, setImportMenuOpen] = React.useState(true);
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'table', label: 'Contratos', icon: TableIcon },
     { id: 'payments-manager', label: 'Gestão de Pagamentos', icon: Receipt },
-    { id: 'import', label: 'Importar Empréstimo', icon: FileUp },
-    { id: 'import-payment', label: 'Importar Pgto Consignado', icon: FileUp },
+  ] as const;
+
+  const importSubItems = [
+    { id: 'import', label: 'Empréstimo' },
+    { id: 'import-payment', label: 'Pgto Consignado' },
+    { id: 'import-fgts-devido', label: 'FGTS Devido' },
+    { id: 'import-fgts-pgto', label: 'Pgto FGTS' },
   ] as const;
 
   const userMetadata = user.user_metadata;
@@ -66,6 +76,51 @@ export function Layout({ children, user, onLogout, activeTab, onTabChange, darkM
               <span className="font-semibold text-sm">{item.label}</span>
             </button>
           ))}
+
+          {/* Menu Importações */}
+          <div className="pt-2">
+            <button
+              onClick={() => setImportMenuOpen(!importMenuOpen)}
+              className={cn(
+                "w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group",
+                importSubItems.some(sub => sub.id === activeTab)
+                  ? "text-primary dark:text-primary font-bold"
+                  : "text-text-muted-light dark:text-text-muted-dark hover:bg-slate-100 dark:hover:bg-slate-800"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <FolderDown className={cn(
+                  "w-5 h-5 transition-colors",
+                  importSubItems.some(sub => sub.id === activeTab) ? "text-primary" : "group-hover:text-primary"
+                )} />
+                <span className="font-semibold text-sm">Importações</span>
+              </div>
+              {importMenuOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+
+            {importMenuOpen && (
+              <div className="mt-1 ml-4 pl-4 border-l border-border-light dark:border-border-dark space-y-1">
+                {importSubItems.map((subItem) => (
+                  <button
+                    key={subItem.id}
+                    onClick={() => onTabChange(subItem.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 text-sm",
+                      activeTab === subItem.id
+                        ? "text-primary font-bold bg-primary/5 shadow-sm"
+                        : "text-text-muted-light dark:text-text-muted-dark hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-1.5 h-1.5 rounded-full transition-all",
+                      activeTab === subItem.id ? "bg-primary scale-125 shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]" : "bg-slate-300 dark:bg-slate-600"
+                    )} />
+                    {subItem.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="p-4 mt-auto space-y-4">

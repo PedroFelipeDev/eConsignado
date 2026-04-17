@@ -81,3 +81,48 @@ CREATE POLICY "Users can update their own pagamentos" ON pagamentos
 
 CREATE POLICY "Users can delete their own pagamentos" ON pagamentos
   FOR DELETE USING (auth.uid() = usuario_id);
+
+-- FGTS Trabalhador Table
+CREATE TABLE IF NOT EXISTS fgts_trabalhador (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('devido', 'pago')),
+  cpf TEXT NOT NULL,
+  nome_trabalhador TEXT NOT NULL,
+  matricula TEXT,
+  categoria TEXT,
+  data_admissao TEXT,
+  estabelecimento TEXT,
+  tomador TEXT,
+  competencia_apuracao TEXT NOT NULL,
+  competencia_referencia TEXT,
+  vencimento_debitos TEXT,
+  tipo_deposito TEXT NOT NULL,
+  base_remuneracao_total NUMERIC,
+  valor_fgts_na_guia NUMERIC,
+  juros NUMERIC,
+  atualizacao_monetaria NUMERIC,
+  multa NUMERIC,
+  total NUMERIC,
+  origem TEXT,
+  versao_ficha TEXT,
+  parcelamento TEXT,
+  importado_em TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT fgts_trabalhador_unique_key UNIQUE (usuario_id, tipo, cpf, competencia_apuracao, tipo_deposito)
+);
+
+-- Enable RLS
+ALTER TABLE fgts_trabalhador ENABLE ROW LEVEL SECURITY;
+
+-- Policies for FGTS Trabalhador
+CREATE POLICY "Users can view their own fgts" ON fgts_trabalhador
+  FOR SELECT USING (auth.uid() = usuario_id);
+
+CREATE POLICY "Users can insert their own fgts" ON fgts_trabalhador
+  FOR INSERT WITH CHECK (auth.uid() = usuario_id);
+
+CREATE POLICY "Users can update their own fgts" ON fgts_trabalhador
+  FOR UPDATE USING (auth.uid() = usuario_id);
+
+CREATE POLICY "Users can delete their own fgts" ON fgts_trabalhador
+  FOR DELETE USING (auth.uid() = usuario_id);

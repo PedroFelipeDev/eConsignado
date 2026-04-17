@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Consignado } from '../types/consignado';
 import { PagamentoConsignado } from '../types/pagamento';
-import { formatCurrency, formatCPF, cn, getYears, normalizeContract, normalizeCPF, maskDate, maskCompetence } from '../lib/utils';
+import { formatCurrency, formatCPF, cn, normalizeContract, normalizeCPF, maskDate, maskCompetence } from '../lib/utils';
 import { 
   Search, 
   Eye, 
@@ -46,7 +46,6 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-
   const competences = useMemo(() => {
     const all = Array.from(new Set(data.map(item => item.competencia)));
     const filtered = yearFilter === 'all' 
@@ -55,10 +54,11 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
     return filtered.sort();
   }, [data, yearFilter]);
 
+  const years = useMemo(() => {
+    const allYears = Array.from(new Set(data.map(item => item.competencia.split('/').pop())));
+    return (allYears.filter(Boolean) as string[]).sort();
+  }, [data]);
 
-  const years = useMemo(() => getYears(data), [data]);
-
-  // Initialize/Sync selected competences when list changes (e.g. year filter changes)
   useEffect(() => {
     if (competences.length > 0) {
       setSelectedCompetences(competences);
@@ -67,8 +67,6 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
     }
   }, [competences]);
 
-
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (competenceDropdownRef.current && !competenceDropdownRef.current.contains(event.target as Node)) {
@@ -85,18 +83,17 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
         item.nomeTrabalhador.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.cpf.includes(searchTerm) ||
         item.contrato.includes(searchTerm) ||
-        item["ifConcessora.descricao"].toLowerCase().includes(searchTerm.toLowerCase());
+        (item["ifConcessora.descricao"]?.toLowerCase().includes(searchTerm.toLowerCase()));
       
-      const matchesEmployer = item.nomeEmpregador.toLowerCase().includes(employerSearch.toLowerCase());
-      const matchesAdmission = item.dataAdmissao.includes(admissionDateSearch);
-      const matchesStartDate = item.competenciaInicioDesconto.includes(startDateSearch);
-      const matchesEndDate = item.competenciaFimDesconto.includes(endDateSearch);
+      const matchesEmployer = item.nomeEmpregador?.toLowerCase().includes(employerSearch.toLowerCase());
+      const matchesAdmission = item.dataAdmissao?.includes(admissionDateSearch);
+      const matchesStartDate = item.competenciaInicioDesconto?.includes(startDateSearch);
+      const matchesEndDate = item.competenciaFimDesconto?.includes(endDateSearch);
       
       const matchesCompetence = selectedCompetences.length === 0 || selectedCompetences.includes(item.competencia);
       const matchesYear = yearFilter === 'all' || item.competencia.endsWith(yearFilter);
       
       return matchesSearch && matchesEmployer && matchesAdmission && matchesStartDate && matchesEndDate && matchesCompetence && matchesYear;
-
     }).sort((a, b) => a.nomeTrabalhador.localeCompare(b.nomeTrabalhador));
   }, [data, searchTerm, employerSearch, admissionDateSearch, startDateSearch, endDateSearch, selectedCompetences, yearFilter]);
 
@@ -112,7 +109,7 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
       );
 
       const isPaid = !!payment;
-      const isDivergent = isPaid && Math.abs(payment.valorPago - item.valorParcela) > 0.01;
+      const isDivergent = isPaid && Math.abs(payment.valorPago - (item.valorParcela || 0)) > 0.01;
       
       if (!statusFilter.includes('all')) {
         if (statusFilter.includes('paid')) return isPaid && !isDivergent;
@@ -146,7 +143,7 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
       if (!payment) {
         inadimplentes++;
       } else {
-        const isDivergent = Math.abs(payment.valorPago - item.valorParcela) > 0.01;
+        const isDivergent = Math.abs(payment.valorPago - (item.valorParcela || 0)) > 0.01;
         if (isDivergent) {
           divergentes++;
         } else {
@@ -219,7 +216,7 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
               <Users className={cn("w-5 h-5", statusFilter.includes('all') ? "text-primary" : "text-blue-600 dark:text-blue-400")} />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Total Contratos</p>
+              <p className="text-[10px] font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Total de Contratos</p>
               <p className="text-xl font-bold text-text-light dark:text-text-dark">{tableStats.total}</p>
             </div>
           </div>
@@ -296,7 +293,6 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
       </div>
 
       <div className="bg-white dark:bg-card-dark rounded-2xl border border-border-light dark:border-border-dark shadow-sm overflow-hidden transition-all duration-300">
-        {/* Filters */}
         <div className="p-6 border-b border-border-light dark:border-border-dark space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
@@ -311,7 +307,6 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
             </div>
             
             <div className="flex flex-wrap items-center gap-2">
-              {/* Multi-select Competence Dropdown */}
               <div className="relative" ref={competenceDropdownRef}>
                 <button
                   onClick={() => setIsCompetenceDropdownOpen(!isCompetenceDropdownOpen)}
@@ -431,12 +426,10 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
                   className="w-full pl-12 pr-4 py-3 bg-bg-light dark:bg-bg-dark rounded-xl border-none focus:ring-2 focus:ring-primary/20 text-text-light dark:text-text-dark placeholder-text-muted-light dark:placeholder-text-muted-dark"
                 />
               </div>
-
             </div>
           )}
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -448,7 +441,6 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-right">Valor Parcela</th>
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-center">Situação</th>
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-center">Ações</th>
-
               </tr>
             </thead>
             <tbody className="divide-y divide-border-light dark:divide-border-dark">
@@ -476,11 +468,7 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
                       <p className="font-bold text-text-light dark:text-text-dark">{item.nomeTrabalhador}</p>
                       <p className="text-[10px] text-text-muted-light dark:text-text-muted-dark font-mono">{formatCPF(item.cpf)}</p>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-text-muted-light dark:text-text-muted-dark">
-                        {item.contrato}
-                      </span>
-                    </td>
+                    <td className="px-6 py-4 text-sm text-text-muted-light dark:text-text-muted-dark">{item.contrato}</td>
                     <td className="px-6 py-4 text-sm text-text-muted-light dark:text-text-muted-dark">{item["ifConcessora.descricao"]}</td>
                     <td className="px-6 py-4 text-sm font-bold text-text-light dark:text-text-dark text-right">{formatCurrency(item.valorParcela)}</td>
 
@@ -512,7 +500,8 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => setSelectedItem(item)}
-                        className="p-2 rounded-lg hover:bg-primary hover:text-white transition-all text-text-muted-light dark:text-text-muted-dark"
+                        className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-all"
+                        title="Detalhes do Contrato"
                       >
                         <Eye className="w-5 h-5" />
                       </button>
@@ -522,8 +511,8 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
               })}
               {paginatedData.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-text-muted-light dark:text-text-muted-dark italic">
-                    Nenhum contrato encontrado com os filtros aplicados.
+                  <td colSpan={7} className="px-6 py-12 text-center text-text-muted-light dark:text-text-muted-dark italic">
+                    Nenhum contrato encontrado.
                   </td>
                 </tr>
               )}
@@ -531,7 +520,7 @@ export function ConsignadoTable({ data, payments }: ConsignadoTableProps) {
             {finalFilteredData.length > 0 && (
               <tfoot>
                 <tr className="bg-bg-light dark:bg-bg-dark border-t border-border-light dark:border-border-dark">
-                  <td colSpan={5} className="px-6 py-4 text-sm font-bold text-text-muted-light dark:text-text-muted-dark text-right uppercase">Total Exibido:</td>
+                  <td colSpan={4} className="px-6 py-4 text-sm font-bold text-text-muted-light dark:text-text-muted-dark text-right uppercase">Total Exibido:</td>
                   <td className="px-6 py-4 text-sm font-bold text-primary dark:text-secondary text-right">{formatCurrency(totalParcelas)}</td>
                   <td></td>
                   <td></td>
