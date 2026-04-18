@@ -362,23 +362,30 @@ export function FgtsDevido({ user, fgtsRecords }: FgtsDevidoProps) {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                if (item.manual_id) {
+                                  handleEdit(records.find(r => r.id === item.manual_id)!);
+                                } else {
+                                  setFormComp(item.competencia);
+                                  setFormValor('');
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }
+                              }}
+                              className="p-2 text-text-muted-light hover:text-primary transition-all"
+                              title={item.manual_id ? "Editar Lançamento" : "Lançar Valor Devido"}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            
                             {item.manual_id && (
-                              <>
-                                <button
-                                  onClick={() => handleEdit(records.find(r => r.id === item.manual_id)!)}
-                                  className="p-2 text-text-muted-light hover:text-primary transition-all"
-                                  title="Editar"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(item.manual_id!)}
-                                  className="p-2 text-text-muted-light hover:text-red-500 transition-all"
-                                  title="Excluir"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </>
+                              <button
+                                onClick={() => handleDelete(item.manual_id!)}
+                                className="p-2 text-text-muted-light hover:text-red-500 transition-all"
+                                title="Excluir Lançamento"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             )}
                           </div>
                         </td>

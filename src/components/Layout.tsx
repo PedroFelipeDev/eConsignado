@@ -11,9 +11,11 @@ import {
   Receipt,
   ChevronDown,
   ChevronRight,
-  FolderDown
+  FolderDown,
+  KeyRound
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { ChangePasswordModal } from './auth/ChangePasswordModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,6 +29,7 @@ interface LayoutProps {
 
 export function Layout({ children, user, onLogout, activeTab, onTabChange, darkMode, onToggleDarkMode }: LayoutProps) {
   const [importMenuOpen, setImportMenuOpen] = React.useState(true);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -136,18 +139,28 @@ export function Layout({ children, user, onLogout, activeTab, onTabChange, darkM
             <span className="font-semibold text-sm">{darkMode ? 'Modo Claro' : 'Modo Escuro'}</span>
           </button>
 
-          <div className="bg-bg-light dark:bg-bg-dark rounded-2xl p-4 flex items-center gap-3 border border-border-light dark:border-border-dark">
-            {userMetadata?.avatar_url ? (
-              <img src={userMetadata.avatar_url} alt={userMetadata.full_name || ''} className="w-10 h-10 rounded-full ring-2 ring-primary/20" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-sm">
-                <UserIcon className="w-6 h-6" />
+          <div className="bg-bg-light dark:bg-bg-dark rounded-2xl p-4 flex flex-col gap-3 border border-border-light dark:border-border-dark shadow-sm">
+            <div className="flex items-center gap-3">
+              {userMetadata?.avatar_url ? (
+                <img src={userMetadata.avatar_url} alt={userMetadata.full_name || ''} className="w-10 h-10 rounded-full ring-2 ring-primary/20" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-sm">
+                  <UserIcon className="w-6 h-6" />
+                </div>
+              )}
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold text-text-light dark:text-text-dark truncate">{userMetadata?.full_name || user.email}</p>
+                <p className="text-[10px] text-text-muted-light dark:text-text-muted-dark truncate">{user.email}</p>
               </div>
-            )}
-            <div className="overflow-hidden">
-              <p className="text-xs font-bold text-text-light dark:text-text-dark truncate">{userMetadata?.full_name || user.email}</p>
-              <p className="text-[10px] text-text-muted-light dark:text-text-muted-dark truncate">{user.email}</p>
             </div>
+            
+            <button
+              onClick={() => setIsPasswordModalOpen(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-light dark:bg-bg-dark border border-border-light dark:border-border-dark text-text-muted-light dark:text-text-muted-dark hover:text-primary hover:border-primary/30 transition-all text-[10px] font-bold uppercase tracking-wider"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              Alterar Senha
+            </button>
           </div>
           
           <button
@@ -166,6 +179,11 @@ export function Layout({ children, user, onLogout, activeTab, onTabChange, darkM
           {children}
         </div>
       </main>
+
+      <ChangePasswordModal 
+        isOpen={isPasswordModalOpen} 
+        onClose={() => setIsPasswordModalOpen(false)} 
+      />
     </div>
   );
 }

@@ -112,44 +112,6 @@ export function ConsignadoDetail({ item, payments, onClose }: ConsignadoDetailPr
               <DetailItem label="Total Parcelas" value={item.totalParcelas.toString()} />
             </div>
           </section>
-
-          <div className="h-px bg-border-light dark:bg-border-dark" />
-
-          {/* Section: Histórico de Pagamentos */}
-          <section>
-            <h4 className="text-[10px] font-bold text-primary dark:text-secondary uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-              <Info className="w-4 h-4" />
-              Histórico de Pagamentos (Guia FGTS Digital)
-            </h4>
-            {contractPayments.length > 0 ? (
-              <div className="bg-bg-light dark:bg-bg-dark rounded-2xl border border-border-light dark:border-border-dark overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100 dark:bg-slate-800/50">
-                      <th className="px-4 py-3 text-[10px] font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Competência</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Vencimento</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Nº Guia</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-right">Valor Pago</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-light dark:divide-border-dark">
-                    {contractPayments.map((p) => (
-                      <tr key={p.id} className="text-sm">
-                        <td className="px-4 py-3 font-semibold text-text-light dark:text-text-dark">{p.competencia}</td>
-                        <td className="px-4 py-3 text-text-muted-light dark:text-text-muted-dark">{p.vencimento}</td>
-                        <td className="px-4 py-3 text-text-muted-light dark:text-text-muted-dark font-mono text-[10px]">{p.numeroGuia}</td>
-                        <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(p.valorPago)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="p-8 text-center bg-bg-light dark:bg-bg-dark rounded-2xl border border-dashed border-border-light dark:border-border-dark">
-                <p className="text-sm text-text-muted-light dark:text-text-muted-dark italic">Nenhum pagamento registrado para este contrato.</p>
-              </div>
-            )}
-          </section>
         </div>
 
         {/* Footer */}
