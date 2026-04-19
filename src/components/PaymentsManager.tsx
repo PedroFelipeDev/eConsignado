@@ -215,21 +215,10 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
         return;
       }
 
-      // Convert to legacy format for generator
-      const legacyFormat = filteredList.map(f => ({
-        id: f.consignadoId,
-        nomeTrabalhador: f.nomeTrabalhador,
-        cpf: f.cpf,
-        contrato: f.contrato,
-        valorPago: f.valorConsignado,
-        competencia: f.competencia,
-        usuario_id: user.id
-      }));
-
       if (type === 'pdf') {
-        generatePaymentsPDF(legacyFormat as any);
+        generatePaymentsPDF(filteredList);
       } else {
-        generatePaymentsCSV(legacyFormat as any);
+        generatePaymentsCSV(filteredList);
       }
     } catch (error) {
       console.error("Erro ao exportar pagamentos:", error);

@@ -13,13 +13,16 @@ import {
   DollarSign,
   Calendar,
   Filter,
-  Loader2
+  Loader2,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { formatCurrency, maskCompetence, getYearFromCompetence } from '../../lib/utils';
 import { formatCompetencia } from '../../lib/csvParser';
 import { FGTSRecord } from '../../types/fgts';
+import { generateFGTSReconciliationPDF, generateFGTSReconciliationCSV } from '../../lib/pdf-generator';
 
 interface FgtsDevidoProps {
   user: User;
@@ -57,6 +60,7 @@ export function FgtsDevido({ user, fgtsRecords }: FgtsDevidoProps) {
   const [formCompetencia, setFormCompetencia] = useState('');
   const [formValor, setFormValor] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -210,6 +214,27 @@ export function FgtsDevido({ user, fgtsRecords }: FgtsDevidoProps) {
     combinedData.map(item => getYearFromCompetence(item.competencia))
   )).filter(Boolean).sort().reverse();
 
+  const handleExport = (type: 'pdf' | 'csv') => {
+    setIsExporting(true);
+    try {
+      if (filteredData.length === 0) {
+        setError("Nenhum dado filtrado para exportar.");
+        return;
+      }
+
+      if (type === 'pdf') {
+        generateFGTSReconciliationPDF(filteredData, Number(selectedYear));
+      } else {
+        generateFGTSReconciliationCSV(filteredData);
+      }
+    } catch (err) {
+      console.error("Export error:", err);
+      setError("Erro ao exportar relatório.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (loading && records.length === 0) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -299,25 +324,46 @@ export function FgtsDevido({ user, fgtsRecords }: FgtsDevidoProps) {
         )}
       </motion.div>
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold text-text-light dark:text-text-dark">Histórico de Conciliação</h3>
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <h3 className="text-xl font-display font-bold text-text-light dark:text-text-dark flex items-center gap-2">
+            Histórico de Conciliação
+          </h3>
           
-          <div className="flex items-center gap-2 bg-white dark:bg-card-dark px-4 py-2 rounded-xl border border-border-light dark:border-border-dark shadow-sm">
-            <Filter className="w-4 h-4 text-text-muted-light" />
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="bg-transparent text-sm font-bold text-primary focus:outline-none"
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => handleExport('csv')}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-all border border-emerald-100 dark:border-emerald-800 shadow-sm"
             >
-              {availableYears.length > 0 ? (
-                availableYears.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))
-              ) : (
-                <option value={new Date().getFullYear().toString()}>{new Date().getFullYear()}</option>
-              )}
-            </select>
+              <FileSpreadsheet className="w-4 h-4" />
+              Exportar CSV
+            </button>
+            <button
+              onClick={() => handleExport('pdf')}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all border border-blue-100 dark:border-blue-800 shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              Exportar PDF
+            </button>
+
+            <div className="flex items-center gap-2 bg-white dark:bg-card-dark px-3 py-2 rounded-xl border border-border-light dark:border-border-dark min-w-[100px]">
+              <Filter className="w-4 h-4 text-text-muted-light dark:text-text-muted-dark" />
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-transparent border-none focus:ring-0 text-sm font-bold text-text-light dark:text-text-dark cursor-pointer appearance-none pr-4"
+              >
+                {availableYears.length > 0 ? (
+                  availableYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))
+                ) : (
+                  <option value={new Date().getFullYear().toString()}>{new Date().getFullYear()}</option>
+                )}
+              </select>
+            </div>
           </div>
         </div>
 
