@@ -348,7 +348,7 @@ export function FgtsDevido({ user, fgtsRecords }: FgtsDevidoProps) {
               Exportar PDF
             </button>
 
-            <div className="flex items-center gap-2 bg-white dark:bg-card-dark px-3 py-2 rounded-xl border border-border-light dark:border-border-dark min-w-[100px]">
+            <div className="flex items-center gap-2 bg-bg-light dark:bg-bg-dark px-3 py-2 rounded-xl border border-border-light dark:border-border-dark min-w-[100px]">
               <Filter className="w-4 h-4 text-text-muted-light dark:text-text-muted-dark" />
               <select
                 value={selectedYear}
@@ -357,10 +357,10 @@ export function FgtsDevido({ user, fgtsRecords }: FgtsDevidoProps) {
               >
                 {availableYears.length > 0 ? (
                   availableYears.map(year => (
-                    <option key={year} value={year}>{year}</option>
+                    <option key={year} value={year} className="dark:bg-card-dark">{year}</option>
                   ))
                 ) : (
-                  <option value={new Date().getFullYear().toString()}>{new Date().getFullYear()}</option>
+                  <option value={new Date().getFullYear().toString()} className="dark:bg-card-dark">{new Date().getFullYear()}</option>
                 )}
               </select>
             </div>
