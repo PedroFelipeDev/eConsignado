@@ -19,23 +19,26 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   }
 });
 
-async function resetPassword() {
-  const userId = '03eb38cd-7b2b-4ab0-9fbf-ab00fd24a0d3';
-  const newPassword = 'ibrase@2026';
+async function renameUser() {
+  const userId = '3a07cb43-f0f5-4970-9ca9-2615f94f3c10';
+  const newEmail = 'ibrase01@gmail.com';
   
-  console.log(`Resetting password for user ID: ${userId}`);
+  console.log(`Renaming user ${userId} to ${newEmail}`);
   
   const { data, error } = await supabase.auth.admin.updateUserById(
     userId,
-    { password: newPassword }
+    { 
+      email: newEmail,
+      email_confirm: true 
+    }
   );
   
   if (error) {
-    console.error('Error resetting password:', error);
+    console.error('Error renaming user:', error);
   } else {
-    console.log('Password reset successfully!');
-    console.log('User:', data.user.email);
+    console.log('User renamed successfully!');
+    console.log('New Email:', data.user.email);
   }
 }
 
-resetPassword();
+renameUser();

@@ -27,11 +27,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency, formatCPF, getYears, maskCompetence, normalizeCPF } from '../lib/utils';
 
 import { PagamentoConsignado } from '../types/pagamento';
-import { FGTSRecord } from '../types/fgts';
+
 import { Consignado } from '../types/consignado';
 import { formatCompetencia } from '../lib/csvParser';
 import { generatePaymentsPDF, generatePaymentsCSV } from '../lib/pdf-generator';
-import { FGTSDetailModal } from './FGTSDetailModal';
+
 
 interface UnifiedPayment {
   id: string; // Composite ID or primary key
@@ -48,11 +48,11 @@ interface UnifiedPayment {
 interface PaymentsManagerProps {
   user: User;
   payments: PagamentoConsignado[];
-  fgtsRecords: FGTSRecord[];
+
   data: Consignado[];
 }
 
-export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsManagerProps) {
+export function PaymentsManager({ user, payments, data }: PaymentsManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompetences, setSelectedCompetences] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState('all');
@@ -72,28 +72,18 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
   const [editValue, setEditValue] = useState('');
   const [editCompetence, setEditCompetence] = useState('');
 
-  const [isFGTSModalOpen, setIsFGTSModalOpen] = useState(false);
-  const [selectedFGTSCpf, setSelectedFGTSCpf] = useState<string | null>(null);
-  const [selectedFGTSCompetence, setSelectedFGTSCompetence] = useState<string | null>(null);
+
 
   const unifiedList = useMemo(() => {
     const list: UnifiedPayment[] = [];
     const seenKeys = new Set<string>();
 
-    // 1. Process Consignado Payments
+    // Process Consignado Payments
     payments.forEach(p => {
       const normCpf = normalizeCPF(p.cpf);
       const key = `${normCpf}_${p.competencia}`;
       if (!seenKeys.has(key)) {
         seenKeys.add(key);
-        
-        // Find matching FGTS payments
-        const matchingFGTS = fgtsRecords.filter(r => 
-          r.tipo === 'pago' && 
-          normalizeCPF(r.cpf) === normCpf && 
-          formatCompetencia(r.competencia_apuracao) === p.competencia
-        );
-        const totalFGTS = matchingFGTS.reduce((acc, r) => acc + r.valor_fgts_na_guia, 0);
 
         // Check if person has a loan contract for this competence
         const hasLoanContract = data.some(d => 
@@ -101,51 +91,24 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
           d.competencia === p.competencia
         );
 
-        list.push({
-          id: p.id || `up_${normCpf}_${p.competencia}`,
-          cpf: p.cpf,
-          nomeTrabalhador: p.nomeTrabalhador,
-          competencia: p.competencia,
-          contrato: p.contrato,
-          valorConsignado: p.valorPago,
-          valorFGTS: totalFGTS,
-          temEmprestimo: hasLoanContract,
-          consignadoId: p.id
-        });
-      }
-    });
-
-    // 2. Process FGTS Payments (only those not already in the list)
-    fgtsRecords.filter(r => r.tipo === 'pago').forEach(r => {
-      const normCpf = normalizeCPF(r.cpf);
-      const comp = formatCompetencia(r.competencia_apuracao);
-      const key = `${normCpf}_${comp}`;
-      
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-
-        // Check if person has a loan contract for this competence
-        const hasLoanContract = data.some(d => 
-          normalizeCPF(d.cpf) === normCpf && 
-          d.competencia === comp
-        );
-
-        list.push({
-          id: `up_${normCpf}_${comp}`,
-          cpf: r.cpf,
-          nomeTrabalhador: r.nome_trabalhador,
-          competencia: comp,
-          contrato: '-',
-          valorConsignado: 0,
-          valorFGTS: fgtsRecords.filter(f => f.tipo === 'pago' && normalizeCPF(f.cpf) === normCpf && formatCompetencia(f.competencia_apuracao) === comp).reduce((acc, f) => acc + f.valor_fgts_na_guia, 0),
-          temEmprestimo: hasLoanContract,
-          consignadoId: undefined
-        });
+        if (hasLoanContract) {
+          list.push({
+            id: p.id || `up_${normCpf}_${p.competencia}`,
+            cpf: p.cpf,
+            nomeTrabalhador: p.nomeTrabalhador,
+            competencia: p.competencia,
+            contrato: p.contrato,
+            valorConsignado: p.valorPago,
+            valorFGTS: 0,
+            temEmprestimo: hasLoanContract,
+            consignadoId: p.id
+          });
+        }
       }
     });
 
     return list;
-  }, [payments, fgtsRecords, data]);
+  }, [payments, data]);
 
   const competences = useMemo(() => {
     const all = Array.from(new Set(unifiedList.map(p => p.competencia)));
@@ -534,7 +497,6 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Trabalhador</th>
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider">Empréstimo</th>
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-right">Pago (Consignado)</th>
-                <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-right">Pago (FGTS)</th>
                 <th className="px-6 py-4 text-xs font-bold text-text-muted-light dark:text-text-muted-dark uppercase tracking-wider text-center">Ações</th>
               </tr>
             </thead>
@@ -582,12 +544,6 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
                         up.valorConsignado > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-text-muted-light/30"
                       )}>{formatCurrency(up.valorConsignado)}</span>
                     )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className={cn(
-                        "text-sm font-bold",
-                        up.valorFGTS > 0 ? "text-blue-600 dark:text-blue-400" : "text-text-muted-light/30"
-                    )}>{formatCurrency(up.valorFGTS)}</span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-1">
@@ -644,20 +600,6 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
                                 </button>
                             </>
                           )}
-                          
-                          {up.valorFGTS > 0 && (
-                            <button
-                                onClick={() => {
-                                    setSelectedFGTSCpf(normalizeCPF(up.cpf));
-                                    setSelectedFGTSCompetence(up.competencia);
-                                    setIsFGTSModalOpen(true);
-                                }}
-                                className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-all"
-                                title="Detalhes do FGTS"
-                            >
-                                <Building2 className="w-4 h-4" />
-                            </button>
-                          )}
                         </>
                       )}
                     </div>
@@ -677,7 +619,6 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
                 <tr className="bg-bg-light dark:bg-bg-dark border-t border-border-light dark:border-border-dark">
                   <td colSpan={3} className="px-6 py-4 text-sm font-bold text-text-muted-light dark:text-text-muted-dark text-right uppercase">Total Parcelas:</td>
                   <td className="px-6 py-4 text-sm font-bold text-emerald-600 dark:text-emerald-400 text-right">{formatCurrency(totalConsignado)}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-blue-600 dark:text-blue-400 text-right">{formatCurrency(totalFGTS)}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -730,20 +671,6 @@ export function PaymentsManager({ user, payments, fgtsRecords, data }: PaymentsM
         )}
       </div>
 
-      <AnimatePresence>
-        {selectedFGTSCpf && selectedFGTSCompetence && isFGTSModalOpen && (
-          <FGTSDetailModal
-            cpf={selectedFGTSCpf}
-            competence={selectedFGTSCompetence}
-            records={fgtsRecords}
-            onClose={() => {
-              setIsFGTSModalOpen(false);
-              setSelectedFGTSCpf(null);
-              setSelectedFGTSCompetence(null);
-            }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

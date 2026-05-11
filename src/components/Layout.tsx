@@ -21,8 +21,8 @@ interface LayoutProps {
   children: React.ReactNode;
   user: User;
   onLogout: () => void;
-  activeTab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'import-fgts-devido' | 'payments-manager' | 'import-fgts-pgto';
-  onTabChange: (tab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'import-fgts-devido' | 'payments-manager' | 'import-fgts-pgto') => void;
+  activeTab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'payments-manager';
+  onTabChange: (tab: 'dashboard' | 'table' | 'import' | 'import-payment' | 'payments-manager') => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
 }
@@ -40,8 +40,6 @@ export function Layout({ children, user, onLogout, activeTab, onTabChange, darkM
   const importSubItems = [
     { id: 'import', label: 'Empréstimo' },
     { id: 'import-payment', label: 'Pgto Consignado' },
-    { id: 'import-fgts-devido', label: 'FGTS Devido' },
-    { id: 'import-fgts-pgto', label: 'Pgto FGTS' },
   ] as const;
 
   const userMetadata = user.user_metadata;

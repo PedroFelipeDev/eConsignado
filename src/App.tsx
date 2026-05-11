@@ -8,14 +8,13 @@ import { supabase } from './lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { Consignado } from './types/consignado';
 import { PagamentoConsignado } from './types/pagamento';
-import { FGTSRecord } from './types/fgts';
+
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { ConsignadoTable } from './components/ConsignadoTable';
 import { FileUploader } from './components/FileUploader';
 import { PaymentUploader } from './components/PaymentUploader';
-import { FGTSUploader } from './components/FGTSUploader';
-import { FgtsDevido } from './components/fgts/FgtsDevido';
+
 import { PaymentsManager } from './components/PaymentsManager';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LogIn, Loader2 } from 'lucide-react';
@@ -26,8 +25,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<Consignado[]>([]);
   const [payments, setPayments] = useState<PagamentoConsignado[]>([]);
-  const [fgtsRecords, setFgtsRecords] = useState<FGTSRecord[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'import' | 'import-payment' | 'import-fgts-devido' | 'payments-manager' | 'import-fgts-pgto'>('dashboard');
+
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'import' | 'import-payment' | 'payments-manager'>('dashboard');
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('darkMode') === 'true';
@@ -72,7 +71,6 @@ export default function App() {
     if (!user) {
       setData([]);
       setPayments([]);
-      setFgtsRecords([]);
       return;
     }
 
@@ -160,23 +158,6 @@ export default function App() {
     fetchConsignados();
     fetchPagamentos();
 
-    // Fetch FGTS Records
-    const fetchFGTSRecords = async () => {
-      const { data: fgts, error } = await supabase
-        .from('fgts_trabalhador')
-        .select('*')
-        .eq('usuario_id', user.id)
-        .order('importado_em', { ascending: false })
-        .limit(50000);
-
-      if (error) {
-        console.error('Error fetching FGTS records:', error);
-      } else {
-        setFgtsRecords(fgts || []);
-      }
-    };
-
-    fetchFGTSRecords();
 
     // Set up real-time subscriptions
     const consignadosSubscription = supabase
@@ -213,22 +194,10 @@ export default function App() {
         }
       });
 
-    const fgtsSubscription = supabase
-      .channel('fgts_changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'fgts_trabalhador'
-      }, (payload) => {
-        console.log('Realtime update (fgts):', payload);
-        fetchFGTSRecords();
-      })
-      .subscribe();
 
     return () => {
       supabase.removeChannel(consignadosSubscription);
       supabase.removeChannel(pagamentosSubscription);
-      supabase.removeChannel(fgtsSubscription);
     };
   }, [user]);
 
@@ -378,29 +347,10 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
             >
-              <PaymentsManager user={user as any} payments={payments} fgtsRecords={fgtsRecords} data={data} />
+              <PaymentsManager user={user as any} payments={payments} data={data} />
             </motion.div>
           )}
-          {activeTab === 'import-fgts-pgto' && (
-            <motion.div
-              key="import-fgts-pgto"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <FGTSUploader user={user as any} />
-            </motion.div>
-          )}
-          {activeTab === 'import-fgts-devido' && (
-            <motion.div
-              key="import-fgts-devido"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <FgtsDevido user={user as any} fgtsRecords={fgtsRecords} />
-            </motion.div>
-          )}
+
         </AnimatePresence>
       </Layout>
     </ErrorBoundary>
